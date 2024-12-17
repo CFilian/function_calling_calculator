@@ -2,11 +2,19 @@ from unittest.mock import MagicMock, patch
 import groq_api.api as api  # Import the module under test
 
 def test_call_groq_function():
+    # Create a mock response to match the API structure
+    mock_message = MagicMock()
+    mock_message.content = "Test response"
+
+    mock_choice = MagicMock()
+    mock_choice.message = mock_message
+
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+
     # Mock the client object and its behavior
     mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = {
-        "choices": [{"message": {"content": "Test response"}}]
-    }
+    mock_client.chat.completions.create.return_value = mock_response
 
     # Inject 'client' into the global namespace of api.py
     with patch.dict(api.__dict__, {"client": mock_client}):

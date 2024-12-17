@@ -6,6 +6,9 @@ import re  # For parsing the input
 # Create Flask app instance
 app = Flask(__name__)
 
+# In-memory history to store past operations
+history = []
+
 # HTML Template for the web terminal
 HTML_PAGE = """
 <!DOCTYPE html>
@@ -22,7 +25,7 @@ HTML_PAGE = """
     </style>
 </head>
 <body>
-    <div id="output">Welcome to the Function Calling Calculator!\nTo use commands use  'add', 'subtract ', 'multiply ', or 'divide '.\nFunction can be used as is:\n'operation' num(space)num\n'operation' num(+,*,/,-)num\n'operation' num(space)(+,*,/,-)(space)num\nType 'quit' to exit.\n</div>
+    <div id="output">Welcome to the Function Calling Calculator!\nTo use commands use  'add', 'subtract ', 'multiply ', or 'divide '.\nFunction can be used as is:\n'operation' num(space)num\n'operation' num(+,*,/,-)num\n'operation' num(space)(+,*,/,-)(space)num\nType 'history' to view past calculations.\nType 'quit' to exit.\n</div>
     <input id="input" autofocus placeholder="Type a command..." />
 
     <script>
@@ -89,27 +92,40 @@ def parse_command(command):
 def execute_command():
     """Process user commands and perform operations."""
     data = request.get_json()
-    command = data.get("command", "")
+    command = data.get("command", "").strip()
     response_message = ""
 
     try:
-        operation, num1, num2 = parse_command(command)
-
-        if operation == "add":
-            result = add(num1, num2)
-        elif operation == "subtract":
-            result = subtract(num1, num2)
-        elif operation == "multiply":
-            result = multiply(num1, num2)
-        elif operation == "divide":
-            if num2 == 0:
-                raise ValueError("Error: Division by zero is not allowed.")
-            result = divide(num1, num2)
+        if command.lower() == "history":
+            # Show history of calculations
+            if not history:
+                response_message = "No calculations in history."
+            else:
+                response_message = "Calculation History:\n" + "\n".join(history)
         else:
-            raise ValueError("Unsupported operation. Use add, subtract, multiply, or divide.")
+            # Parse the command
+            operation, num1, num2 = parse_command(command)
 
-        log_operation(f"{operation.title()} {num1} and {num2}: Result = {result}")
-        response_message = f"Result: {result}"
+            # Perform the operation
+            if operation == "add":
+                result = add(num1, num2)
+            elif operation == "subtract":
+                result = subtract(num1, num2)
+            elif operation == "multiply":
+                result = multiply(num1, num2)
+            elif operation == "divide":
+                if num2 == 0:
+                    raise ValueError("Error: Division by zero is not allowed.")
+                result = divide(num1, num2)
+            else:
+                raise ValueError("Unsupported operation. Use add, subtract, multiply, or divide.")
+
+            # Log the operation to history
+            log_message = f"{operation.title()} {num1} and {num2}: Result = {result}"
+            log_operation(log_message)  # Logs to the console and file
+            history.append(log_message)  # Add to in-memory history
+
+            response_message = f"Result: {result}"
     except Exception as e:
         response_message = f"Error: {str(e)}"
 
@@ -118,3 +134,4 @@ def execute_command():
 if __name__ == "__main__":
     # Run the Flask app
     app.run(host="0.0.0.0", port=8000)
+

@@ -1,11 +1,20 @@
-class History:
-    def __init__(self):
-        self.history = []
+import datetime
 
-    def add_entry(self, command, result):
-        """Add a calculation entry to the history."""
-        self.history.append(f"{command} = {result}")
+LOG_FILE = "operation_history.log"
 
-    def get_all(self):
-        """Retrieve all calculation history."""
-        return self.history
+def log_operation(message):
+    """
+    Logs a message to both the console and a log file.
+
+    Args:
+        message (str): The message to log.
+    """
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_message = f"[{timestamp}] {message}"
+
+    # Log to the console
+    print(log_message)
+
+    # Append the message to a log file
+    with open(LOG_FILE, "a") as file:
+        file.write(log_message + "\n")

@@ -1,23 +1,22 @@
-from unittest.mock import patch
-from groq_api.api import call_groq_function
+from unittest.mock import MagicMock, patch
+import groq_api.api as api  # Import the module under test
 
-@patch("groq_api.api.client.chat.completions.create")
-def test_call_groq_function(mock_create):
-    # Mock the Groq API response as a dictionary
-    mock_create.return_value = {
-        "choices": [
-            {"message": {"content": "Mocked Response"}}
-        ]
+def test_call_groq_function():
+    # Mock the client object and its behavior
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = {
+        "choices": [{"message": {"content": "Test response"}}]
     }
 
-    # Call the function with mocked response
-    result = call_groq_function("Test input")
-    
-    # Assertions
-    assert result == "Mocked Response"
+    # Inject 'client' into the global namespace of api.py
+    with patch.dict(api.__dict__, {"client": mock_client}):
+        # Call the function under test
+        user_input = "Hello, Groq!"
+        result = api.call_groq_function(user_input)
 
-    # Ensure the mock was called with the correct arguments
-    mock_create.assert_called_once_with(
-        messages=[{"role": "user", "content": "Test input"}],
-        model="llama3-8b-8192",
-    )
+        # Assertions
+        mock_client.chat.completions.create.assert_called_once_with(
+            messages=[{"role": "user", "content": user_input}],
+            model="llama3-8b-8192",
+        )
+        assert result == "Test response"

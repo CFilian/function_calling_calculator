@@ -1,3 +1,8 @@
+import groq  # Import the Groq SDK
+
+# Initialize the client with your API key
+client = groq.Groq(api_key="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")  # Replace with your actual Groq API key
+
 def call_groq_function(user_input):
     """
     Calls the Groq API to process the user input and return the result.
@@ -18,7 +23,14 @@ def call_groq_function(user_input):
         )
 
         # Access the response as a dictionary
-        return chat_completion["choices"][0]["message"]["content"]
+        return chat_completion.choices[0].message.content  # Access properties safely
 
     except Exception as e:
         raise RuntimeError(f"An error occurred: {e}")
+
+# Example usage
+try:
+    response = call_groq_function("Tell me a joke about AI.")
+    print("Groq Response:", response)
+except Exception as err:
+    print(err)

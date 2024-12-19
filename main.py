@@ -1,13 +1,12 @@
 from flask import Flask, request, jsonify, render_template_string
 from arithmetic.operations import add, subtract, multiply, divide
+from database.db import Base, engine, SessionLocal
+from database.models import OperationHistory
 from history.tracker import log_operation
 import re  # For parsing the input
 
 # Create Flask app instance
 app = Flask(__name__)
-
-# In-memory history to store past operations
-history = []
 
 # HTML Template for the web terminal
 HTML_PAGE = """
@@ -25,7 +24,7 @@ HTML_PAGE = """
     </style>
 </head>
 <body>
-    <div id="output">Welcome to the Function Calling Calculator!\nTo use commands use  'add', 'subtract ', 'multiply ', or 'divide '.\nFunction can be used as is:\n'operation' num(space)num\n'operation' num(+,*,/,-)num\n'operation' num(space)(+,*,/,-)(space)num\nType 'history' to view past calculations.\nType 'quit' to exit.\n</div>
+    <div id="output">Welcome to the Function Calling Calculator!\nTo use commands use 'add', 'subtract', 'multiply', or 'divide'.\nExample usage:\n'operation num1 num2'\nType 'history' to view past calculations.\nType 'quit' to exit.\n</div>
     <input id="input" autofocus placeholder="Type a command..." />
 
     <script>
@@ -43,7 +42,6 @@ HTML_PAGE = """
                     return;
                 }
 
-                // Send the command to the Flask server
                 const response = await fetch("/execute", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -66,27 +64,34 @@ def home():
 
 def parse_command(command):
     """
-    Parse a command string like 'add 10 + 20' or 'multiply 5*6' and return operation and numbers.
+    Parse a command string like 'add 10 20' or '10 + 20' and return operation and numbers.
 
     Args:
         command (str): The user input string.
 
     Returns:
-        tuple: (operation, num1, num2) or raises ValueError if invalid.
+        tuple: (operation, numbers) or raises ValueError if invalid.
     """
     try:
-        # Extract operation and numbers using regex
-        match = re.match(r"(\w+)\s*(\d+)\s*[\+\-\*\/]?\s*(\d+)", command)
-        if not match:
-            raise ValueError("Invalid command format. Use 'add 10+20' or similar.")
-        
-        operation = match.group(1).lower()
-        num1 = int(match.group(2))
-        num2 = int(match.group(3))
-
-        return operation, num1, num2
+        # Handle commands with operators like "+" or "*"
+        if any(op in command for op in ["+", "-", "*", "/"]):
+            match = re.split(r"([+\-*/])", command.replace(" ", ""))
+            if not match or len(match) < 3:
+                raise ValueError("Invalid command format. Use '10 + 20' or 'add 10 20'.")
+            
+            operation = "add" if "+" in match else "subtract" if "-" in match else "multiply" if "*" in match else "divide"
+            numbers = [float(num) for num in match if num.strip() and num not in "+-*/"]
+        else:
+            # Handle commands like 'add 10 20'
+            match = re.match(r"(\w+)\s+([\d\s\.]+)", command)
+            if not match:
+                raise ValueError("Invalid command format. Use 'add 10 20'.")
+            
+            operation = match.group(1).lower()
+            numbers = [float(num) for num in match.group(2).split()]
+        return operation, numbers
     except Exception:
-        raise ValueError("Failed to parse the command. Use 'add 10+20' or similar.")
+        raise ValueError("Failed to parse the command. Use '10 + 20' or 'add 10 20'.")
 
 @app.route("/execute", methods=["POST"])
 def execute_command():
@@ -97,34 +102,40 @@ def execute_command():
 
     try:
         if command.lower() == "history":
-            # Show history of calculations
-            if not history:
+            # Fetch history of calculations from the database using ORM
+            db = SessionLocal()
+            results = db.query(OperationHistory).all()
+            db.close()
+
+            if not results:
                 response_message = "No calculations in history."
             else:
-                response_message = "Calculation History:\n" + "\n".join(history)
+                response_message = "Calculation History:\n" + "\n".join(
+                    [f"{row.operation.title()} {row.operand1} and {row.operand2}: Result = {row.result}" for row in results]
+                )
         else:
             # Parse the command
-            operation, num1, num2 = parse_command(command)
+            operation, numbers = parse_command(command)
 
             # Perform the operation
             if operation == "add":
-                result = add(num1, num2)
+                result = round(sum(numbers), 2)
             elif operation == "subtract":
-                result = subtract(num1, num2)
+                result = round(numbers[0] - sum(numbers[1:]), 2)
             elif operation == "multiply":
-                result = multiply(num1, num2)
+                result = round(eval('*'.join(map(str, numbers))), 2)
             elif operation == "divide":
-                if num2 == 0:
-                    raise ValueError("Error: Division by zero is not allowed.")
-                result = divide(num1, num2)
+                result = numbers[0]
+                for num in numbers[1:]:
+                    if num == 0:
+                        raise ValueError("Division by zero is not allowed.")
+                    result /= num
+                result = round(result, 2)
             else:
                 raise ValueError("Unsupported operation. Use add, subtract, multiply, or divide.")
 
-            # Log the operation to history
-            log_message = f"{operation.title()} {num1} and {num2}: Result = {result}"
-            log_operation(log_message)  # Logs to the console and file
-            history.append(log_message)  # Add to in-memory history
-
+            # Log the operation to the database
+            log_operation(operation, numbers, result)
             response_message = f"Result: {result}"
     except Exception as e:
         response_message = f"Error: {str(e)}"
@@ -132,6 +143,8 @@ def execute_command():
     return jsonify({"message": response_message})
 
 if __name__ == "__main__":
+    # Initialize the database
+    Base.metadata.create_all(bind=engine)
+
     # Run the Flask app
     app.run(host="0.0.0.0", port=8000)
-

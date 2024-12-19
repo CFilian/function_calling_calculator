@@ -35,3 +35,5 @@ urllib3==2.2.3
 Werkzeug==3.1.3
 uvicorn==0.29.0  # Added for serving your app in Docker
 gunicorn==21.2.0  # Added for production server (optional)
+SQLAlchemy
+psycopg2-binary  # Only if you're using PostgreSQL, not needed for SQLite
